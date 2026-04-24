@@ -1,0 +1,104 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum VolunteerStatus {
+  PENDING
+  ACTIVE
+  INACTIVE
+}
+
+enum TaskStatus {
+  DRAFT
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ApplicationStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+}
+
+model Volunteer {
+  id           String          @id @default(uuid())
+  name         String
+  email        String          @unique
+  bio          String?
+  skills       String[]
+  location     String?
+  status       VolunteerStatus @default(PENDING)
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+  applications Application[]
+
+  @@map("volunteers")
+}
+
+model Organization {
+  id           String   @id @default(uuid())
+  name         String
+  description  String?
+  location     String?
+  contactEmail String   @unique @map("contact_email")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  tasks        Task[]
+
+  @@map("organizations")
+}
+
+model Task {
+  id             String        @id @default(uuid())
+  organizationId String        @map("organization_id")
+  title          String
+  description    String
+  requiredSkills String[]      @map("required_skills")
+  location       String?
+  startDate      DateTime?     @map("start_date")
+  endDate        DateTime?     @map("end_date")
+  maxVolunteers  Int           @default(1) @map("max_volunteers")
+  status         TaskStatus    @default(DRAFT)
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+  applications   Application[]
+
+  @@map("tasks")
+}
+
+model Application {
+  id          String            @id @default(uuid())
+  volunteerId String            @map("volunteer_id")
+  taskId      String            @map("task_id")
+  status      ApplicationStatus @default(PENDING)
+  matchScore  Float?            @map("match_score")
+  matchReason String?           @map("match_reason")
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+  volunteer   Volunteer         @relation(fields: [volunteerId], references: [id])
+  task        Task              @relation(fields: [taskId], references: [id])
+
+  @@unique([volunteerId, taskId])
+  @@map("applications")
+}
+
+// Outbox Pattern — gwarantuje spójność eventów z zapisem do bazy
+model OutboxEvent {
+  id          String    @id @default(uuid())
+  eventType   String    @map("event_type")
+  payload     Json
+  processed   Boolean   @default(false)
+  occurredAt  DateTime  @default(now()) @map("occurred_at")
+  processedAt DateTime? @map("processed_at")
+
+  @@map("outbox_events")
+}
