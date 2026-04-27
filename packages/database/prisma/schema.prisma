@@ -7,6 +7,10 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ============================================================================
+// ENUMS
+// ============================================================================
+
 enum VolunteerStatus {
   PENDING
   ACTIVE
@@ -28,77 +32,318 @@ enum ApplicationStatus {
   WITHDRAWN
 }
 
-model Volunteer {
-  id           String          @id @default(uuid())
-  name         String
-  email        String          @unique
-  bio          String?
-  skills       String[]
-  location     String?
-  status       VolunteerStatus @default(PENDING)
-  createdAt    DateTime        @default(now()) @map("created_at")
-  updatedAt    DateTime        @updatedAt @map("updated_at")
-  applications Application[]
+enum UserRole {
+  ADMIN
+  ORGANIZATION
+  VOLUNTEER
+}
 
+enum EmailVerificationStatus {
+  PENDING
+  VERIFIED
+  EXPIRED
+}
+
+enum PasswordResetStatus {
+  PENDING
+  USED
+  EXPIRED
+}
+
+enum AuditActionType {
+  USER_REGISTERED
+  USER_LOGIN
+  USER_LOGIN_FAILED
+  USER_LOGOUT
+  PASSWORD_CHANGED
+  PASSWORD_RESET
+  ACCOUNT_LOCKED
+  ACCOUNT_UNLOCKED
+  EMAIL_VERIFIED
+  PROFILE_UPDATED
+  APPLICATION_SUBMITTED
+  APPLICATION_ACCEPTED
+  APPLICATION_REJECTED
+  ROLE_CHANGED
+  2FA_ENABLED
+  2FA_DISABLED
+  DATA_EXPORT_REQUESTED
+  DATA_DELETION_REQUESTED
+  DATA_DELETED
+}
+
+enum DataDeletionStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+}
+
+// ============================================================================
+// AUTHENTICATION & USERS
+// ============================================================================
+
+/// User model — centralized auth
+model User {
+  id                    String                     @id @default(uuid())
+  email                 String                     @unique @db.VarChar(255)
+  emailNormalized       String                     @unique @db.VarChar(255) @map("email_normalized")
+  hashedPassword        String                     @map("hashed_password")
+  role                  UserRole                   @default(VOLUNTEER)
+  status                VolunteerStatus            @default(PENDING)
+  
+  // Email verification
+  emailVerified         Boolean                    @default(false) @map("email_verified")
+  emailVerificationToken String?                   @unique @map("email_verification_token")
+  emailVerificationSentAt DateTime?                @map("email_verification_sent_at")
+  emailVerificationExpiresAt DateTime?             @map("email_verification_expires_at")
+  
+  // Password reset
+  passwordResetToken    String?                    @unique @map("password_reset_token")
+  passwordResetExpiresAt DateTime?                 @map("password_reset_expires_at")
+  passwordChangedAt     DateTime?                  @map("password_changed_at")
+  
+  // 2FA (TOTP)
+  totpEnabled           Boolean                    @default(false) @map("totp_enabled")
+  totpSecret            String?                    @map("totp_secret")
+  totpBackupCodes       String[]                   @map("totp_backup_codes")
+  
+  // Security
+  accountLocked         Boolean                    @default(false) @map("account_locked")
+  lockExpiresAt         DateTime?                  @map("lock_expires_at")
+  failedLoginAttempts   Int                        @default(0) @map("failed_login_attempts")
+  lastLoginAt           DateTime?                  @map("last_login_at")
+  lastLoginIp           String?                    @map("last_login_ip")
+  
+  // GDPR
+  dataExportRequested   Boolean                    @default(false) @map("data_export_requested")
+  dataExportRequestedAt DateTime?                  @map("data_export_requested_at")
+  dataExportCompletedAt DateTime?                  @map("data_export_completed_at")
+  
+  // Relationships
+  volunteer             Volunteer?
+  organization          Organization?
+  loginTokens           LoginToken[]
+  auditLogs             AuditLog[]
+  dataDeletionRequest   DataDeletionRequest?
+  
+  createdAt             DateTime                   @default(now()) @map("created_at")
+  updatedAt             DateTime                   @updatedAt @map("updated_at")
+
+  @@index([email])
+  @@index([emailNormalized])
+  @@index([emailVerified])
+  @@index([role])
+  @@index([accountLocked])
+  @@map("users")
+}
+
+/// JWT Refresh Tokens — session management
+model LoginToken {
+  id                    String                     @id @default(uuid())
+  userId                String                     @map("user_id")
+  user                  User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  token                 String                     @unique
+  tokenHash             String                     @unique @map("token_hash")
+  expiresAt             DateTime                   @map("expires_at")
+  revokedAt             DateTime?                  @map("revoked_at")
+  
+  ipAddress             String?                    @map("ip_address")
+  userAgent             String?                    @map("user_agent")
+  
+  createdAt             DateTime                   @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([revokedAt])
+  @@map("login_tokens")
+}
+
+// ============================================================================
+// CORE MODELS
+// ============================================================================
+
+model Volunteer {
+  id                    String                     @id @default(uuid())
+  userId                String                     @unique @map("user_id")
+  user                  User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  name                  String                     @db.VarChar(255)
+  bio                   String?                    @db.VarChar(1000)
+  skills                String[]
+  location              String?                    @db.VarChar(255)
+  status                VolunteerStatus            @default(PENDING)
+  
+  // Preferences
+  availableHours        Int?                       @map("available_hours")
+  maxDistance           Int?                       @map("max_distance") // km
+  
+  // Profile completeness
+  profileComplete       Boolean                    @default(false) @map("profile_complete")
+  
+  applications          Application[]
+  
+  createdAt             DateTime                   @default(now()) @map("created_at")
+  updatedAt             DateTime                   @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
   @@map("volunteers")
 }
 
 model Organization {
-  id           String   @id @default(uuid())
-  name         String
-  description  String?
-  location     String?
-  contactEmail String   @unique @map("contact_email")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
-  tasks        Task[]
+  id                    String                     @id @default(uuid())
+  userId                String                     @unique @map("user_id")
+  user                  User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  name                  String                     @db.VarChar(255)
+  description           String?                    @db.VarChar(2000)
+  location              String?                    @db.VarChar(255)
+  contactEmail          String                     @db.VarChar(255)
+  
+  // Organization metadata
+  website               String?                    @db.VarChar(500)
+  registrationNumber    String?                    @db.VarChar(50) @map("registration_number")
+  taxId                 String?                    @map("tax_id")
+  
+  // Verification
+  verified              Boolean                    @default(false)
+  verifiedAt            DateTime?                  @map("verified_at")
+  
+  tasks                 Task[]
+  
+  createdAt             DateTime                   @default(now()) @map("created_at")
+  updatedAt             DateTime                   @updatedAt @map("updated_at")
 
+  @@index([userId])
+  @@index([verified])
+  @@index([createdAt])
   @@map("organizations")
 }
 
 model Task {
-  id             String        @id @default(uuid())
-  organizationId String        @map("organization_id")
-  title          String
-  description    String
-  requiredSkills String[]      @map("required_skills")
-  location       String?
-  startDate      DateTime?     @map("start_date")
-  endDate        DateTime?     @map("end_date")
-  maxVolunteers  Int           @default(1) @map("max_volunteers")
-  status         TaskStatus    @default(DRAFT)
-  createdAt      DateTime      @default(now()) @map("created_at")
-  updatedAt      DateTime      @updatedAt @map("updated_at")
-  organization   Organization  @relation(fields: [organizationId], references: [id])
-  applications   Application[]
+  id                    String                     @id @default(uuid())
+  organizationId        String                     @map("organization_id")
+  organization          Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  title                 String                     @db.VarChar(255)
+  description           String                     @db.VarChar(2000)
+  requiredSkills        String[]                   @map("required_skills")
+  location              String?                    @db.VarChar(255)
+  startDate             DateTime?                  @map("start_date")
+  endDate               DateTime?                  @map("end_date")
+  maxVolunteers         Int                        @default(1) @map("max_volunteers")
+  status                TaskStatus                 @default(DRAFT)
+  
+  // Metadata
+  createdBy             String                     @map("created_by")
+  
+  applications          Application[]
+  
+  createdAt             DateTime                   @default(now()) @map("created_at")
+  updatedAt             DateTime                   @updatedAt @map("updated_at")
 
+  @@index([organizationId])
+  @@index([status])
+  @@index([createdAt])
   @@map("tasks")
 }
 
 model Application {
-  id          String            @id @default(uuid())
-  volunteerId String            @map("volunteer_id")
-  taskId      String            @map("task_id")
-  status      ApplicationStatus @default(PENDING)
-  matchScore  Float?            @map("match_score")
-  matchReason String?           @map("match_reason")
-  createdAt   DateTime          @default(now()) @map("created_at")
-  updatedAt   DateTime          @updatedAt @map("updated_at")
-  volunteer   Volunteer         @relation(fields: [volunteerId], references: [id])
-  task        Task              @relation(fields: [taskId], references: [id])
+  id                    String                     @id @default(uuid())
+  volunteerId           String                     @map("volunteer_id")
+  taskId                String                     @map("task_id")
+  volunteer             Volunteer                  @relation(fields: [volunteerId], references: [id], onDelete: Cascade)
+  task                  Task                       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  
+  status                ApplicationStatus          @default(PENDING)
+  matchScore            Float?                     @map("match_score")
+  matchReason           String?                    @map("match_reason")
+  
+  // Decision tracking
+  decidedAt             DateTime?                  @map("decided_at")
+  decidedBy             String?                    @map("decided_by")
+  
+  createdAt             DateTime                   @default(now()) @map("created_at")
+  updatedAt             DateTime                   @updatedAt @map("updated_at")
 
   @@unique([volunteerId, taskId])
+  @@index([volunteerId])
+  @@index([taskId])
+  @@index([status])
   @@map("applications")
 }
 
-// Outbox Pattern — gwarantuje spójność eventów z zapisem do bazy
-model OutboxEvent {
-  id          String    @id @default(uuid())
-  eventType   String    @map("event_type")
-  payload     Json
-  processed   Boolean   @default(false)
-  occurredAt  DateTime  @default(now()) @map("occurred_at")
-  processedAt DateTime? @map("processed_at")
+// ============================================================================
+// AUDIT & COMPLIANCE
+// ============================================================================
 
+/// Audit Log — GDPR compliance & security monitoring
+model AuditLog {
+  id                    String                     @id @default(uuid())
+  userId                String                     @map("user_id")
+  user                  User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  action                AuditActionType
+  resourceType          String?                    @map("resource_type")
+  resourceId            String?                    @map("resource_id")
+  changes               Json? // { before: {}, after: {} }
+  
+  ipAddress             String?                    @map("ip_address")
+  userAgent             String?                    @map("user_agent")
+  
+  createdAt             DateTime                   @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([action])
+  @@index([resourceType])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+/// Outbox Pattern — gwarantuje spójność eventów z zapisem do bazy
+model OutboxEvent {
+  id                    String                     @id @default(uuid())
+  eventType             String                     @map("event_type")
+  eventVersion          String                     @default("1.0") @map("event_version")
+  payload               Json
+  
+  // Event integrity
+  producer              String
+  signature             String? // HMAC-SHA256
+  
+  processed             Boolean                    @default(false)
+  occurredAt            DateTime                   @default(now()) @map("occurred_at")
+  processedAt           DateTime?                  @map("processed_at")
+  
+  retryCount            Int                        @default(0) @map("retry_count")
+  lastError             String?                    @map("last_error")
+
+  @@index([processed])
+  @@index([eventType])
+  @@index([occurredAt])
   @@map("outbox_events")
+}
+
+/// GDPR Data Deletion — audit trail for regulatory compliance
+model DataDeletionRequest {
+  id                    String                     @id @default(uuid())
+  userId                String                     @unique @map("user_id")
+  user                  User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  status                DataDeletionStatus         @default(PENDING)
+  reason                String?                    @db.VarChar(500)
+  
+  requestedAt           DateTime                   @default(now()) @map("requested_at")
+  confirmationToken     String                     @unique @map("confirmation_token")
+  confirmedAt           DateTime?                  @map("confirmed_at")
+  completedAt           DateTime?                  @map("completed_at")
+  
+  failureReason         String?                    @map("failure_reason")
+
+  @@index([status])
+  @@index([requestedAt])
+  @@map("data_deletion_requests")
 }
