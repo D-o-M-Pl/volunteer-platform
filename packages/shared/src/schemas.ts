@@ -1,40 +1,44 @@
 import { z } from 'zod';
 
+const shortText = z.string().trim().min(1).max(200);
+const optionalText = z.string().trim().max(2000).optional();
+const skill = z.string().trim().min(1).max(80);
+
 export const CreateVolunteerSchema = z.object({
-  name: z.string().min(1),
-  email: z.string().email(),
-  bio: z.string().optional(),
-  skills: z.array(z.string()).default([]),
-  location: z.string().optional(),
-});
+  name: shortText,
+  email: z.string().trim().email().max(320),
+  bio: optionalText,
+  skills: z.array(skill).max(50).default([]),
+  location: z.string().trim().max(200).optional(),
+}).strict();
 
 export const CreateOrganizationSchema = z.object({
-  name: z.string().min(1),
-  description: z.string().optional(),
-  location: z.string().optional(),
-  contactEmail: z.string().email(),
-});
+  name: shortText,
+  description: optionalText,
+  location: z.string().trim().max(200).optional(),
+  contactEmail: z.string().trim().email().max(320),
+}).strict();
 
 export const CreateTaskSchema = z.object({
   organizationId: z.string().uuid(),
-  title: z.string().min(1),
-  description: z.string().min(1),
-  requiredSkills: z.array(z.string()).default([]),
-  location: z.string().optional(),
+  title: shortText,
+  description: z.string().trim().min(1).max(5000),
+  requiredSkills: z.array(skill).max(50).default([]),
+  location: z.string().trim().max(200).optional(),
   startDate: z.string().datetime().optional(),
   endDate: z.string().datetime().optional(),
-  maxVolunteers: z.number().int().positive().default(1),
-});
+  maxVolunteers: z.number().int().positive().max(10000).default(1),
+}).strict();
 
 export const CreateApplicationSchema = z.object({
   volunteerId: z.string().uuid(),
   taskId: z.string().uuid(),
-});
+}).strict();
 
 export const MatchVolunteersSchema = z.object({
   taskId: z.string().uuid(),
   limit: z.number().int().positive().max(20).default(5),
-});
+}).strict();
 
 export type CreateVolunteerInput = z.infer<typeof CreateVolunteerSchema>;
 export type CreateOrganizationInput = z.infer<typeof CreateOrganizationSchema>;
