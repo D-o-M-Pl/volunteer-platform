@@ -17,6 +17,19 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: volunteer
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d volunteer"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/volunteer
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -27,6 +40,10 @@ jobs:
         run: corepack enable
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
+      - name: Validate Prisma schema
+        run: pnpm --filter @volunteer/database exec prisma validate
+      - name: Apply production migrations
+        run: pnpm --filter @volunteer/database exec prisma migrate deploy
       - name: Generate Prisma client
         run: pnpm db:generate
       - name: Type-check and lint
