@@ -7,14 +7,14 @@ import { ownVolunteer } from '../security/scope';
 
 export const volunteersRoutes: FastifyPluginAsync = async (app) => {
   app.get('/', async (req, reply) => {
-    if (!requireRole(req, reply, 'ADMIN')) return;
+    if (!requireRole(req, reply, 'PLATFORM_ADMIN')) return;
     return db.volunteer.findMany({ orderBy: { createdAt: 'desc' } });
   });
 
   app.get('/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
     const own = await ownVolunteer(req);
-    if (!hasRole(req, 'ADMIN') && own?.id !== id) return reply.status(403).send({ error: 'forbidden' });
+    if (!hasRole(req, 'PLATFORM_ADMIN') && own?.id !== id) return reply.status(403).send({ error: 'forbidden' });
     const volunteer = await db.volunteer.findUnique({
       where: { id },
       include: { applications: { include: { task: { include: { organization: true } } } } },
@@ -53,9 +53,9 @@ export const volunteersRoutes: FastifyPluginAsync = async (app) => {
   app.patch('/:id/status', async (req, reply) => {
     const { id } = req.params as { id: string };
     const own = await ownVolunteer(req);
-    if (!hasRole(req, 'ADMIN') && own?.id !== id) return reply.status(403).send({ error: 'forbidden' });
+    if (!hasRole(req, 'PLATFORM_ADMIN') && own?.id !== id) return reply.status(403).send({ error: 'forbidden' });
     const { status } = req.body as { status?: string };
-    const allowed = hasRole(req, 'ADMIN') ? ['ACTIVE', 'INACTIVE', 'PENDING'] : ['INACTIVE'];
+    const allowed = hasRole(req, 'PLATFORM_ADMIN') ? ['ACTIVE', 'INACTIVE', 'PENDING'] : ['INACTIVE'];
     if (!status || !allowed.includes(status)) return reply.status(400).send({ error: 'Nieprawidłowy status' });
     return db.volunteer.update({ where: { id }, data: { status: status as any } });
   });
