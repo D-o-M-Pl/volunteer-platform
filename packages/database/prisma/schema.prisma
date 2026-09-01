@@ -7,11 +7,11 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum VolunteerStatus { PENDING ACTIVE INACTIVE }
-enum TaskStatus { DRAFT OPEN IN_PROGRESS COMPLETED CANCELLED }
-enum ApplicationStatus { PENDING ACCEPTED REJECTED WITHDRAWN }
-enum OrganizationRole { NGO_OWNER NGO_MANAGER NGO_RECRUITER NGO_VIEWER }
-enum MembershipStatus { ACTIVE SUSPENDED }
+enum VolunteerStatus {\n  PENDING\n  ACTIVE\n  INACTIVE\n}
+enum TaskStatus {\n  DRAFT\n  OPEN\n  IN_PROGRESS\n  COMPLETED\n  CANCELLED\n}
+enum ApplicationStatus {\n  PENDING\n  ACCEPTED\n  REJECTED\n  WITHDRAWN\n}
+enum OrganizationRole {\n  NGO_OWNER\n  NGO_MANAGER\n  NGO_RECRUITER\n  NGO_VIEWER\n}
+enum MembershipStatus {\n  ACTIVE\n  SUSPENDED\n}
 
 model Volunteer {
   id String @id @default(uuid())
