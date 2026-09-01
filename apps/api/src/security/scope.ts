@@ -1,7 +1,8 @@
 import type { FastifyRequest } from 'fastify';
-import type { OrganizationRole } from '@prisma/client';
 import { db } from '../plugins/db';
 import { hasRole } from './auth';
+
+type OrganizationRole = 'NGO_OWNER' | 'NGO_MANAGER' | 'NGO_RECRUITER' | 'NGO_VIEWER';
 
 export type OrganizationPermission = 'VIEW_PRIVATE' | 'MANAGE_TASKS' | 'MANAGE_APPLICATIONS' | 'MANAGE_MEMBERS';
 
