@@ -29,22 +29,24 @@ enum ApplicationStatus {
 }
 
 model Volunteer {
-  id           String          @id @default(uuid())
-  name         String
-  email        String          @unique
-  bio          String?
-  skills       String[]
-  location     String?
-  status       VolunteerStatus @default(PENDING)
-  createdAt    DateTime        @default(now()) @map("created_at")
-  updatedAt    DateTime        @updatedAt @map("updated_at")
-  applications Application[]
+  id              String          @id @default(uuid())
+  identitySubject String?         @unique @map("identity_subject")
+  name            String
+  email           String          @unique
+  bio             String?
+  skills          String[]
+  location        String?
+  status          VolunteerStatus @default(PENDING)
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  applications    Application[]
 
   @@map("volunteers")
 }
 
 model Organization {
   id           String   @id @default(uuid())
+  ownerSubject String?  @unique @map("owner_subject")
   name         String
   description  String?
   location     String?
@@ -72,6 +74,7 @@ model Task {
   organization   Organization  @relation(fields: [organizationId], references: [id])
   applications   Application[]
 
+  @@index([organizationId, status])
   @@map("tasks")
 }
 
@@ -88,10 +91,10 @@ model Application {
   task        Task              @relation(fields: [taskId], references: [id])
 
   @@unique([volunteerId, taskId])
+  @@index([taskId, status])
   @@map("applications")
 }
 
-// Outbox Pattern — gwarantuje spójność eventów z zapisem do bazy
 model OutboxEvent {
   id          String    @id @default(uuid())
   eventType   String    @map("event_type")

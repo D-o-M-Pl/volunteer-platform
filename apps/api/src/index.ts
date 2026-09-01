@@ -6,11 +6,18 @@ import { volunteersRoutes } from './routes/volunteers';
 import { organizationsRoutes } from './routes/organizations';
 import { tasksRoutes } from './routes/tasks';
 import { applicationsRoutes } from './routes/applications';
+import { authenticate } from './security/auth';
+
+const isProduction = process.env.NODE_ENV === 'production';
+if (isProduction && (!process.env.CORS_ORIGINS || process.env.CORS_ORIGINS.includes('localhost'))) {
+  throw new Error('Production CORS_ORIGINS must be explicit and must not contain localhost');
+}
 
 const app = Fastify({
   logger: { level: process.env.LOG_LEVEL || 'info' },
-  bodyLimit: 1024 * 1024,
+  bodyLimit: 256 * 1024,
   trustProxy: process.env.TRUST_PROXY === 'true',
+  requestIdHeader: 'x-request-id',
 });
 
 function allowedOrigins(): Set<string> {
@@ -20,32 +27,36 @@ function allowedOrigins(): Set<string> {
 
 async function start() {
   const origins = allowedOrigins();
-
-  await app.register(helmet, {
-    contentSecurityPolicy: false,
-  });
+  await app.register(helmet);
   await app.register(rateLimit, {
-    max: Number(process.env.RATE_LIMIT_MAX) || 100,
+    max: Number(process.env.RATE_LIMIT_MAX) || 60,
     timeWindow: '1 minute',
+    keyGenerator: (request) => request.headers.authorization?.slice(-32) || request.ip,
   });
   await app.register(cors, {
     credentials: false,
     methods: ['GET', 'POST', 'PATCH', 'OPTIONS'],
     origin(origin, callback) {
-      if (!origin || origins.has(origin)) {
-        callback(null, true);
-        return;
-      }
-      callback(null, false);
+      callback(null, !origin || origins.has(origin));
     },
   });
 
+  app.addHook('onRequest', authenticate);
   await app.register(volunteersRoutes, { prefix: '/api/volunteers' });
   await app.register(organizationsRoutes, { prefix: '/api/organizations' });
   await app.register(tasksRoutes, { prefix: '/api/tasks' });
   await app.register(applicationsRoutes, { prefix: '/api/applications' });
 
-  app.get('/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }));
+  app.get('/health/live', async () => ({ status: 'ok' }));
+  app.get('/health/ready', async (_request, reply) => {
+    try {
+      const { db } = await import('./plugins/db');
+      await db.$queryRaw`SELECT 1`;
+      return { status: 'ready' };
+    } catch {
+      return reply.status(503).send({ status: 'not_ready' });
+    }
+  });
 
   const port = Number(process.env.PORT) || 3001;
   await app.listen({ port, host: process.env.HOST || '127.0.0.1' });
