@@ -7,44 +7,28 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum VolunteerStatus {
-  PENDING
-  ACTIVE
-  INACTIVE
-}
-
-enum TaskStatus {
-  DRAFT
-  OPEN
-  IN_PROGRESS
-  COMPLETED
-  CANCELLED
-}
-
-enum ApplicationStatus {
-  PENDING
-  ACCEPTED
-  REJECTED
-  WITHDRAWN
-}
+enum VolunteerStatus { PENDING ACTIVE INACTIVE }
+enum TaskStatus { DRAFT OPEN IN_PROGRESS COMPLETED CANCELLED }
+enum ApplicationStatus { PENDING ACCEPTED REJECTED WITHDRAWN }
 
 model Volunteer {
-  id           String          @id @default(uuid())
-  name         String
-  email        String          @unique
-  bio          String?
-  skills       String[]
-  location     String?
-  status       VolunteerStatus @default(PENDING)
-  createdAt    DateTime        @default(now()) @map("created_at")
-  updatedAt    DateTime        @updatedAt @map("updated_at")
-  applications Application[]
-
+  id              String          @id @default(uuid())
+  identitySubject String?         @unique @map("identity_subject")
+  name            String
+  email           String          @unique
+  bio             String?
+  skills          String[]
+  location        String?
+  status          VolunteerStatus @default(PENDING)
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  applications    Application[]
   @@map("volunteers")
 }
 
 model Organization {
   id           String   @id @default(uuid())
+  ownerSubject String?  @unique @map("owner_subject")
   name         String
   description  String?
   location     String?
@@ -52,7 +36,6 @@ model Organization {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
   tasks        Task[]
-
   @@map("organizations")
 }
 
@@ -71,7 +54,7 @@ model Task {
   updatedAt      DateTime      @updatedAt @map("updated_at")
   organization   Organization  @relation(fields: [organizationId], references: [id])
   applications   Application[]
-
+  @@index([organizationId, status])
   @@map("tasks")
 }
 
@@ -86,12 +69,11 @@ model Application {
   updatedAt   DateTime          @updatedAt @map("updated_at")
   volunteer   Volunteer         @relation(fields: [volunteerId], references: [id])
   task        Task              @relation(fields: [taskId], references: [id])
-
   @@unique([volunteerId, taskId])
+  @@index([taskId, status])
   @@map("applications")
 }
 
-// Outbox Pattern — gwarantuje spójność eventów z zapisem do bazy
 model OutboxEvent {
   id          String    @id @default(uuid())
   eventType   String    @map("event_type")
@@ -99,6 +81,5 @@ model OutboxEvent {
   processed   Boolean   @default(false)
   occurredAt  DateTime  @default(now()) @map("occurred_at")
   processedAt DateTime? @map("processed_at")
-
   @@map("outbox_events")
 }
