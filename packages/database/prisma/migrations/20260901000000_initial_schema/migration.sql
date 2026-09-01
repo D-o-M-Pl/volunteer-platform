@@ -66,9 +66,7 @@ CREATE TABLE "outbox_events" (
 
 CREATE UNIQUE INDEX "volunteers_email_key" ON "volunteers"("email");
 CREATE UNIQUE INDEX "organizations_contact_email_key" ON "organizations"("contact_email");
-CREATE INDEX "tasks_organization_id_status_idx" ON "tasks"("organization_id", "status");
 CREATE UNIQUE INDEX "applications_volunteer_id_task_id_key" ON "applications"("volunteer_id", "task_id");
-CREATE INDEX "applications_task_id_status_idx" ON "applications"("task_id", "status");
 
 ALTER TABLE "tasks" ADD CONSTRAINT "tasks_organization_id_fkey" FOREIGN KEY ("organization_id") REFERENCES "organizations"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE "applications" ADD CONSTRAINT "applications_volunteer_id_fkey" FOREIGN KEY ("volunteer_id") REFERENCES "volunteers"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
