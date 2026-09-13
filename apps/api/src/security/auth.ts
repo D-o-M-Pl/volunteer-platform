@@ -29,9 +29,10 @@ function normalizeRoles(value: unknown): AppRole[] {
 export async function authenticate(request: FastifyRequest, reply: FastifyReply) {
   if (!request.url.startsWith('/api/')) return;
   const authorization = request.headers.authorization ?? '';
-  if (authorization.slice(0, 6).toLowerCase() !== 'bearer') return reply.status(401).send({ error: 'authentication_required' });
-  const token = authorization.slice(6).trimStart();
-  if (!token || token.length === authorization.length - 6) return reply.status(401).send({ error: 'authentication_required' });
+  const separator = authorization[6];
+  if (authorization.slice(0, 6).toLowerCase() !== 'bearer' || !separator || separator.trim() !== '') return reply.status(401).send({ error: 'authentication_required' });
+  const token = authorization.slice(7).trimStart();
+  if (!token) return reply.status(401).send({ error: 'authentication_required' });
   try {
     const { issuer, audience, verifier: jwks } = config();
     const { payload } = await jwtVerify(token, jwks, { issuer, audience, algorithms: ['RS256', 'ES256'], clockTolerance: 5, maxTokenAge: '1h' });
