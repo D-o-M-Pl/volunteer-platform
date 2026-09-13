@@ -31,7 +31,9 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
   const authorization = request.headers.authorization ?? '';
   const separator = authorization[6];
   if (authorization.slice(0, 6).toLowerCase() !== 'bearer' || !separator || separator.trim() !== '') return reply.status(401).send({ error: 'authentication_required' });
-  const token = authorization.slice(7).trimStart();
+  let tokenStart = 7;
+  while (tokenStart < authorization.length && authorization[tokenStart].trim() === '') tokenStart += 1;
+  const token = authorization.slice(tokenStart);
   if (!token) return reply.status(401).send({ error: 'authentication_required' });
   try {
     const { issuer, audience, verifier: jwks } = config();
