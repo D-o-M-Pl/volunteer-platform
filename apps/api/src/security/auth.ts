@@ -28,11 +28,16 @@ function normalizeRoles(value: unknown): AppRole[] {
 
 export async function authenticate(request: FastifyRequest, reply: FastifyReply) {
   if (!request.url.startsWith('/api/')) return;
-  const match = /^Bearer\s+(.+)$/i.exec(request.headers.authorization ?? '');
-  if (!match) return reply.status(401).send({ error: 'authentication_required' });
+  const authorization = request.headers.authorization ?? '';
+  const separator = authorization[6];
+  if (authorization.slice(0, 6).toLowerCase() !== 'bearer' || !separator || separator.trim() !== '') return reply.status(401).send({ error: 'authentication_required' });
+  let tokenStart = 7;
+  while (tokenStart < authorization.length && authorization[tokenStart].trim() === '') tokenStart += 1;
+  const token = authorization.slice(tokenStart);
+  if (!token) return reply.status(401).send({ error: 'authentication_required' });
   try {
     const { issuer, audience, verifier: jwks } = config();
-    const { payload } = await jwtVerify(match[1], jwks, { issuer, audience, algorithms: ['RS256', 'ES256'], clockTolerance: 5, maxTokenAge: '1h' });
+    const { payload } = await jwtVerify(token, jwks, { issuer, audience, algorithms: ['RS256', 'ES256'], clockTolerance: 5, maxTokenAge: '1h' });
     if (!payload.sub) throw new Error('missing subject');
     const roles = normalizeRoles(payload.roles ?? payload.role);
     if (roles.length === 0) throw new Error('missing application role');
